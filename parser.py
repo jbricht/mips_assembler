@@ -1,5 +1,6 @@
 import collections
 import re
+import enum
 
 import mips_instructions
 
@@ -29,6 +30,7 @@ token_rules = [
 ]
 Instruction = collections.namedtuple('Instruction', ['mnemonic', 'operands'])
 Token = collections.namedtuple("Token", ['type', 'value'])
+OperandType = enum.Enum('OperandType', 'label literal register displaced')
 
 
 class ParseError(Exception):
@@ -50,9 +52,9 @@ class Lexer:
                 return Token(token_type, m.group())
         return None
 
-    def lex(self, input):
+    def lex(self, input_string):
         self.pos = 0
-        self.input = input
+        self.input = input_string
 
         while self.pos < len(self.input):
             t = self.next_token()
@@ -72,46 +74,96 @@ class Parser:
     def cur_tok(self):
         return self.toks[self.pos]
 
-    def next_tok(self):
+    def advance_tok(self):
         self.pos += 1
-        return self.cur_tok()
 
-    def match_tok(self, tok_type):
-        if self.cur_tok().type != tok_type:
-            raise ParseError(self.pos, tok_type, self.cur_tok().type)
-        return self.cur_tok()
+    def match(self, tok_type):
+        ct = self.cur_tok()
+        if ct.type == tok_type:
+            self.advance_tok()
+            return ct
+        else:
+            raise ParseError(self.pos, tok_type, ct.type)
 
-    def expect_tok(self, tok_type):
-        self.next_tok()
-        return self.match_tok(tok_type)
+    def register(self):
+        self.match("dollar")
+        return self.match("register")
 
-    def match_label_def(self):
-        label = self.match_tok("identifier")
-        self.expect_tok("colon")
-        return label
+    def label(self):
+        return self.match("identifier")
 
-    def match_operand(self):
-        if self.cur_tok().type in ['decimal', 'hex', 'identifier']:
-            return self.cur_tok()
+    def literal(self):
+        # this is ugly, should have one token type for all literals
+        ct = self.cur_tok()
+        if ct.type in {'hex', 'decimal'}:
+            self.advance_tok()
+            return ct
+        else:
+            # eeeew
+            raise ParseError(self.pos, "hex or decimal", ct.type)
+
+    def operand(self):
+        """
+        returns a tuple of the operand type, and the operand itself.
+        for disp($reg) operands, returns (type, displacement, register)
+        otherwise just (type, operand)
+        the displacement must be a literal
+        """
+        if self.cur_tok().type in {'hex', 'decimal'}:
+            # either just a literal or disp($reg)
+            lit = self.literal()
+            if self.cur_tok().type == 'left_paren':
+                self.match('left_paren')
+                displaced_reg = self.register()
+                self.match('right_paren')
+                return OperandType.displaced, lit, displaced_reg
+            else:
+                return OperandType.literal, lit
+
+        elif self.cur_tok().type == 'identifier':
+            return OperandType.label, self.label()
         elif self.cur_tok().type == 'dollar':
-            return self.expect_tok('register')
-        else:
-            raise ParseError(self.pos, None, self.cur_tok().type)
+            return OperandType.register, self.register()
 
-    def parse_line(self):
-        if self.cur_tok().type == 'identifier':
-            label = self.match_label_def().value
-        else:
-            label = None
+    def operand_list(self):
+        """
+        operand {comma operand}
+        """
+        ops = [self.operand()]
 
-        if self.next_tok().type != 'mnemonic':
-            raise ParseError(self.pos, 'mnemonic', self.cur_tok().type)
+        while self.cur_tok().type == 'comma':
+            self.match('comma')
+            ops.append(self.operand())
+        return ops
+
+    def line(self):
+        """
+        [identifier colon] [mnemonic [operand_list]] newline
+        """
+        label = None
+        if self.cur_tok().type == "identifier":
+            label = self.match("identifier")
+            self.match("colon")
+
+        if self.cur_tok().type == 'newline':
+            return label, None, None
+
+        mnemo = self.match('mnemonic')
+
+        if self.cur_tok().type == "newline":
+            operands = []
         else:
-            mnemonic = self.cur_tok().value
-        operands = []
-        while self.next_tok().type in ['dollar', 'register', 'decimal', 'hex', 'identifier']:
-            operands.append(self.match_operand())
-            if self.next_tok().type != 'comma':
-                break
-        if self.cur_tok().type != 'newline': raise ParseError(self.pos, 'newline', self.cur_tok().type)
-        return (label, mnemonic, operands)
+            operands = self.operand_list()
+
+        self.match("newline")
+        return label, mnemo, operands
+
+
+if __name__ == '__main__':
+    from sys import stdin
+
+    l = Lexer(token_rules)
+    while True:
+        input_line = stdin.readline()
+        p = Parser(l.lex(input_line))
+        print(p.line())
