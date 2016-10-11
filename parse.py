@@ -7,21 +7,6 @@ import mips_instructions
 decimal_number = re.compile('[0-9]+')
 hex_number = re.compile('0x[0-9a-f]+', re.IGNORECASE)
 comma = re.compile(',')
-token_rules = [
-    ('whitespace', r'[ \t]+'),
-    ('colon', ':'),
-    ('comma', ','),
-    ('dollar', '\\$'),
-    ('newline', '\n'),
-    ('left_paren', r'\('),
-    ('right_paren', r'\)'),
-    ('mnemonic', '|'.join(
-        sorted(mips_instructions.encoders.keys(), key=lambda m: -len(m)))),
-    ('register', '|'.join(mips_instructions.register_names)),
-    ('decimal', '-?[0-9]+'),
-    ('hex', '-?0x[0-9a-fA-F]+'),
-    ('identifier', '[a-zA-Z_][a-zA-Z0-9_]*')
-]
 Instruction = collections.namedtuple('Instruction', ['mnemonic', 'operands'])
 Token = collections.namedtuple("Token", ['type', 'value'])
 OperandType = enum.Enum('OperandType', 'label literal register displaced')
@@ -219,9 +204,11 @@ def unpack_operand_list(ops):
 
 
 if __name__ == '__main__':
-    from sys import stdin
+    from pprint import pprint
 
-    while True:
-        l = Lexer(stdin.readline())
-        p = Parser(l.lex())
-        print(p.line())
+    test_file = open('strcpy.asm', 'r')
+    parsed_lines = []
+    for l in test_file.readlines():
+        p = Parser(Lexer(l).lex())
+        parsed_lines.append(p.line())
+    pprint(parsed_lines)
