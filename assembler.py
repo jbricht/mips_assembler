@@ -21,8 +21,7 @@ class Assembler:
         self.instructions = []
 
     def def_label(self, label):
-        if label in mips_instructions.register_names or \
-                mips_instructions.encoders.keys():
+        if label in mips_instructions.register_names or label in mips_instructions.encoders.keys():
             raise BadLabel(label)
         else:
             self.symbols['label'] = self.ip
@@ -56,3 +55,19 @@ class Assembler:
 
     def encode_instructions(self):
         return b''.join(self.encode_instruction(i) for i in self.instructions)
+
+def assemble_file(fp):
+    """
+    Read in a file and assemble it.
+    :param fp: a file-like object containing MIPS assembly code
+    :return: a bytes of the assembled machine code.
+    """
+    assembler = Assembler()
+    assembly_statements = parse.parse_file(fp)
+    for stmt in assembly_statements:
+        if stmt.label:
+            assembler.def_label(stmt.label)
+        if stmt.instruction:
+            assembler.push_instruction(stmt.instruction)
+    return assembler.encode_instructions()
+

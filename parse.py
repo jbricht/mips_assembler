@@ -7,10 +7,10 @@ import mips_instructions
 decimal_number = re.compile('[0-9]+')
 hex_number = re.compile('0x[0-9a-f]+', re.IGNORECASE)
 comma = re.compile(',')
-Instruction = collections.namedtuple('Instruction', ['mnemonic', 'operands'])
+AsmInstruction = collections.namedtuple('AsmInstruction', ['mnemonic', 'operands'])
 Token = collections.namedtuple("Token", ['type', 'value'])
 OperandType = enum.Enum('OperandType', 'label literal register displaced')
-
+AsmStatement = collections.namedtuple('AsmStatement', ['label', 'instruction'])
 
 class ParseError(Exception):
     def __init__(self, pos, expected, gotten):
@@ -201,6 +201,33 @@ def unpack_operand_list(ops):
         return rs.value, rt.value, displacement.value
     else:
         return [o[1].value for o in ops]
+
+def none_safe_value(foo):
+    # null checks are cool i guess
+    if foo is None:
+        return None
+    else:
+        return foo.value
+
+def parse_file(fp):
+    """
+    Lexes and parses a file line by line.
+    :param fp: The assembler source file to parse.
+    :return: An iterator of AsmStatements
+    """
+    for line in fp.readlines():
+        if not line or line == '\n':
+            continue
+        if not line.endswith('\n'):
+            line += '\n'
+        label, mnemonic, op_list = Parser(Lexer(line).lex()).line()
+        if mnemonic is None:
+            yield AsmStatement(label.value, None)
+        else:
+            yield AsmStatement(none_safe_value(label),
+                                AsmInstruction(none_safe_value(mnemonic), unpack_operand_list(op_list)))
+
+
 
 
 if __name__ == '__main__':
