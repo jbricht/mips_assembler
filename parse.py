@@ -4,13 +4,6 @@ import enum
 
 import mips_instructions
 
-mnemonic = re.compile('|'.join(mips_instructions.encoders.keys()),
-                      re.IGNORECASE)
-label_def = re.compile(r'([a-zA-Z1-9_]+):')
-identifier = re.compile(r'[a-z1-9]', re.IGNORECASE)
-whitespace = re.compile(r'[ \t]+')
-register_operand = re.compile(
-    r'\$(' + '|'.join(mips_instructions.register_names) + ')', re.IGNORECASE)
 decimal_number = re.compile('[0-9]+')
 hex_number = re.compile('0x[0-9a-f]+', re.IGNORECASE)
 comma = re.compile(',')
@@ -22,10 +15,11 @@ token_rules = [
     ('newline', '\n'),
     ('left_paren', r'\('),
     ('right_paren', r'\)'),
-    ('mnemonic', '|'.join(mips_instructions.encoders.keys())),
+    ('mnemonic', '|'.join(
+        sorted(mips_instructions.encoders.keys(), key=lambda m: -len(m)))),
     ('register', '|'.join(mips_instructions.register_names)),
-    ('decimal', '[0-9]+'),
-    ('hex', '0x[0-9a-fA-F]+'),
+    ('decimal', '-?[0-9]+'),
+    ('hex', '-?0x[0-9a-fA-F]+'),
     ('identifier', '[a-zA-Z_][a-zA-Z0-9_]*')
 ]
 Instruction = collections.namedtuple('Instruction', ['mnemonic', 'operands'])
@@ -41,21 +35,67 @@ class ParseError(Exception):
 
 
 class Lexer:
-    def __init__(self, rules):
-        self.rules = [(name, re.compile(regex)) for (name, regex) in rules]
+    punctuation_types = {
+        ':': 'colon',
+        ',': 'comma',
+        '$': 'dollar',
+        '\n': 'newline',
+        '(': 'left_paren',
+        ')': 'right_paren'
+    }
+    punctuation = ''.join(punctuation_types.keys())
+    mnemonics = set(mips_instructions.encoders.keys())
+    registers = set(mips_instructions.register_names)
+    whitespace = re.compile(r'[ \t]+')
+    identifier = re.compile(r'[a-z_][a-z0-9_]*', re.I)
+    decimal = re.compile('-?[0-9]+')
+    hex = re.compile('-?0x[0-9a-fA-F]+')
 
-    def next_token(self):
-        for (token_type, token_re) in self.rules:
-            m = token_re.match(self.input, self.pos)
-            if m:
-                self.pos = m.end()
-                return Token(token_type, m.group())
-        return None
-
-    def lex(self, input_string):
+    def __init__(self, input_string):
         self.pos = 0
         self.input = input_string
+        pass
 
+    def match_re(self, compiled_re):
+        return compiled_re.match(self.input, self.pos)
+
+    def next_token(self):
+        # match single-character punctuation
+        cur = self.input[self.pos]
+        if cur in self.punctuation:
+            self.pos += 1
+            return Token(self.punctuation_types[cur], cur)
+        """
+        The re package does not have any way to do maximal-munch, so the
+        following is necessary to resolve ambiguities between identifiers,
+        mnemonics, and registers, as well as ambiguities among mnemonics
+        such as add, addi, addiu, etc.
+        """
+        m = self.match_re(self.identifier)
+        if m:
+            self.pos = m.end()
+            if m.group() in self.mnemonics:
+                tok_type = 'mnemonic'
+            elif m.group() in self.registers:
+                tok_type = 'register'
+            else:
+                tok_type = 'identifier'
+            return Token(tok_type, m.group())
+        m = self.match_re(self.whitespace)
+        if m:
+            self.pos = m.end()
+            return Token('whitespace', m.group())
+        m = self.match_re(self.decimal)
+        if m:
+            self.pos = m.end()
+            return Token('decimal', m.group())
+        m = self.match_re(self.hex)
+        if m:
+            self.pos = m.end()
+            return Token('hex', m.group())
+        return None  # No matching token found
+
+    def lex(self):
         while self.pos < len(self.input):
             t = self.next_token()
             if t is None:
@@ -114,9 +154,9 @@ class Parser:
             lit = self.literal()
             if self.cur_tok().type == 'left_paren':
                 self.match('left_paren')
-                displaced_reg = self.register()
+                base_reg = self.register()
                 self.match('right_paren')
-                return OperandType.displaced, lit, displaced_reg
+                return OperandType.displaced, lit, base_reg
             else:
                 return OperandType.literal, lit
 
@@ -159,11 +199,29 @@ class Parser:
         return label, mnemo, operands
 
 
+def unpack_operand_list(ops):
+    """
+    This massages lists of operands into the order expected by the encoders,
+    and unpacks them from Tokens into bare strings.
+    """
+    if len(ops) > 3:  # no instruction has more than 3 operands
+        raise Exception
+    if OperandType.displaced in [o[0] for o in ops]:
+        # must be of the form op rt, disp(rs)
+        if ops[0][0] != OperandType.register or len(ops) != 2:
+            raise Exception
+        rs = ops[1][2]
+        displacement = ops[1][1]
+        rt = ops[0][1]
+        return rs.value, rt.value, displacement.value
+    else:
+        return [o[1].value for o in ops]
+
+
 if __name__ == '__main__':
     from sys import stdin
 
-    l = Lexer(token_rules)
     while True:
-        input_line = stdin.readline()
-        p = Parser(l.lex(input_line))
+        l = Lexer(stdin.readline())
+        p = Parser(l.lex())
         print(p.line())
