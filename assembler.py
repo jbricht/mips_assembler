@@ -1,7 +1,7 @@
 import struct
 
 import mips_instructions
-from parser import decimal_number, hex_number
+import parse
 
 
 class BadLabel(Exception):
@@ -21,7 +21,8 @@ class Assembler:
         self.instructions = []
 
     def def_label(self, label):
-        if label in mips_instructions.register_names or mips_instructions.encoders.keys():
+        if label in mips_instructions.register_names or \
+                mips_instructions.encoders.keys():
             raise BadLabel(label)
         else:
             self.symbols['label'] = self.ip
@@ -36,9 +37,9 @@ class Assembler:
         numerical representation, resolving label names along the way.
         """
 
-        if decimal_number.match(operand):
+        if parse.decimal_number.match(operand):
             return int(operand)
-        elif hex_number.match(operand):
+        elif parse.hex_number.match(operand):
             return int(operand, 16)
         elif operand in mips_instructions.register_names:
             return mips_instructions.registers[operand]
