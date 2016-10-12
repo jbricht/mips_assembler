@@ -198,7 +198,7 @@ def unpack_operand_list(ops):
         rs = ops[1][2]
         displacement = ops[1][1]
         rt = ops[0][1]
-        return rs.value, rt.value, displacement.value
+        return rt.value, rs.value, displacement.value
     else:
         return [o[1].value for o in ops]
 

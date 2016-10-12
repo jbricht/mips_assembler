@@ -8,7 +8,7 @@ def encode_i_format(opcode, rs, rt, immediate):
 
 
 def encode_j_format(opcode, address):
-    return (opcode << 26) | address
+    return (opcode << 26) | ((address >> 2) % (2 ** 26))
 
 
 def r_format_encoder(funct):
@@ -41,7 +41,11 @@ def j_format_encoder(opcode):
 
     return encoder
 
-
+def offset_field(offset):
+    """
+    Branch instructions take an 18-bit offset, but it's aligned so it only takes 16 bits.
+    """
+    return (offset >> 2) & 0xffff
 # map mnemonics to functions which encode that instruction
 encoders = {
     'add': r_format_encoder(0x20),
@@ -50,31 +54,28 @@ encoders = {
     'addu': r_format_encoder(0x21),
     'and': r_format_encoder(0x24),
     'andi': i_format_encoder(0xc),
-    'b': lambda offset: 0b000100 << 26 | offset,
-    'bal': lambda offset: 0b000001 << 26 | 0b10001 << 16 | offset,
-    'beq': i_format_encoder(0x4),
-    'bgez': lambda rs,
-                   offset: 0b000001 << 26 | rs << 21 | 0b00001 << 16 | offset,
-    'bgezal': lambda rs,
-                     offset: 0b000001 << 26 | rs << 21 | 0b10001 << 16 | offset,
-    'bgtz': lambda rs, offset: 0b000111 << 26 | rs << 21 | offset,
-    'blez': lambda rs, offset: 0b000110 << 26 | rs << 21 | offset,
-    'bltz': lambda rs, offset: 0b000001 << 26 | rs << 21 | offset,
-    'bltzal': lambda rs,
-                     offset: 0b000001 << 26 | rs << 21 | 0b10000 << 16 | offset,
-    'bne': i_format_encoder(0x5),
-    'break': lambda code: code << 6 | 0b001101,
+    'b': lambda offset: 0b000100 << 26 | offset_field(offset),
+    'bal': lambda offset: 0b000001 << 26 | 0b10001 << 16 | offset_field(offset),
+    'beq': lambda rs, rt, offset: 0b000100 << 26 | rs << 21 | rt << 16 | offset_field(offset),
+    'bgez': lambda rs, offset: 0b000001 << 26 | rs << 21 | 0b00001 << 16 | offset_field(offset),
+    'bgezal': lambda rs, offset: 0b000001 << 26 | rs << 21 | 0b10001 << 16 | offset_field(offset),
+    'bgtz': lambda rs, offset: 0b000111 << 26 | rs << 21 | offset_field(offset),
+    'blez': lambda rs, offset: 0b000110 << 26 | rs << 21 | offset_field(offset),
+    'bltz': lambda rs, offset: 0b000001 << 26 | rs << 21 | offset_field(offset),
+    'bltzal': lambda rs, offset: 0b000001 << 26 | rs << 21 | 0b10000 << 16 | offset_field(offset),
+    'bne': lambda rs, rt, offset: 0b000101 << 26 | rs << 21 | rt << 16 | offset_field(offset),
+    'break': lambda code: (code % 2 ** 20) << 6 | 0b001101,
     'div': lambda rs, rt: encode_r_format(0x1a, 0, rs, rt),
     'divu': lambda rs, rt: encode_r_format(0x1b, 0, rs, rt),
     'j': j_format_encoder(0x2),
     'jal': j_format_encoder(0x3),
     'jalr': lambda rd, rs: rs << 21 | rd << 11 | 0b001001,
-    'jr': lambda rs: encode_r_format(0x8, 0, rs, 0),
+    'jr': lambda rs: rs << 21 | 0b001000,
     'lb': i_format_encoder(0b100000),
     'lbu': i_format_encoder(0x24),
     'lh': i_format_encoder(0b100001),
     'lhu': i_format_encoder(0x25),
-    'lui': lambda rt, immediate: encode_i_format(0xf, 0, rt, immediate),
+    'lui': lambda rt, immediate: 0b001111 << 26 | rt << 16 | immediate,
     'lw': i_format_encoder(0x23),
     'lwl': i_format_encoder(0b100010),
     'lwr': i_format_encoder(0b100110),
@@ -105,7 +106,7 @@ encoders = {
     'sw': i_format_encoder(0x2b),
     'swl': i_format_encoder(0b101010),
     'swr': i_format_encoder(0b101110),
-    'syscall': lambda code: code << 6 | 0b001100,
+    'syscall': lambda code: (code % 2 ** 20) << 6 | 0b001100,
     'xor': r_format_encoder(0b100110),
     'xori': i_format_encoder(0b001110)
 }
