@@ -1,0 +1,4 @@
+Get more tests.
+Fix the token types, get proper Operand types, remove all the stringly-typed stuff.
+Support directives (especially .db and stuff) and pseudoinstructions.
+Maybe ELF output?
