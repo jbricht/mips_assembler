@@ -4,8 +4,8 @@ import enum
 
 import mips_instructions
 
-decimal_number = re.compile('[0-9]+')
-hex_number = re.compile('0x[0-9a-f]+', re.IGNORECASE)
+decimal_number = re.compile('-?[0-9]+')
+hex_number = re.compile('-?0x[0-9a-f]+', re.IGNORECASE)
 comma = re.compile(',')
 AsmInstruction = collections.namedtuple('AsmInstruction', ['mnemonic', 'operands'])
 Token = collections.namedtuple("Token", ['type', 'value'])

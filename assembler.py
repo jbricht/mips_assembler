@@ -24,7 +24,7 @@ class Assembler:
         if label in mips_instructions.register_names or label in mips_instructions.encoders.keys():
             raise BadLabel(label)
         else:
-            self.symbols['label'] = self.ip
+            self.symbols[label] = self.ip
 
     def push_instruction(self, insn):
         self.instructions.append(insn)
@@ -71,3 +71,7 @@ def assemble_file(fp):
             assembler.push_instruction(stmt.instruction)
     return assembler.encode_instructions()
 
+
+if __name__ == '__main__':
+    assembled = assemble_file(open('strcpy.asm'))
+    print(assembled.hex())

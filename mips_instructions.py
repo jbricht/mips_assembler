@@ -4,7 +4,7 @@ def encode_r_format(funct, rd, rs, rt, opcode=0, shamt=0):
 
 
 def encode_i_format(opcode, rs, rt, immediate):
-    return (opcode << 26) | (rs << 21) | (rt << 16) | immediate
+    return (opcode << 26) | (rs << 21) | (rt << 16) | (immediate & 0xffff)
 
 
 def encode_j_format(opcode, address):
